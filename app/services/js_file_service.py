@@ -1,12 +1,13 @@
 import httpx
-import sqlalchemy as sa
 from uuid import uuid4, UUID
 from datetime import datetime
 from typing import List, Optional
+import asyncio
 
 from app.db.database import database
 from app.models.js_file_model import js_files
 from app.models.schemas import JSFileResponse
+from app.messaging.publisher import publish_message
 
 class JSFileService:
     """
@@ -20,9 +21,8 @@ class JSFileService:
         async with httpx.AsyncClient() as client:
             try:
                 response = await client.get(url, follow_redirects=True, timeout=10.0)
-                response.raise_for_status() # Raises an exception for 4xx or 5xx responses
+                response.raise_for_status()
                 
-                # We will print the content to the console as requested.
                 print(f"Fetched content from {url}:\n---\n{response.text}\n---")
                 
                 return response.text
@@ -36,39 +36,43 @@ class JSFileService:
     async def update_file_content(self, file_id: UUID) -> Optional[JSFileResponse]:
         """
         Fetches the content for a specific file from its URL and updates the database.
+        Also publishes a notification if the content has changed.
         """
-        # First, retrieve the existing file record to get the URL
         query = js_files.select().where(js_files.c.id == file_id)
         existing_file = await database.fetch_one(query)
         
         if not existing_file:
             return None
         
-        # Fetch the new content
-        content = await self._fetch_js_content(existing_file.url)
+        new_content = await self._fetch_js_content(existing_file.url)
         
-        # If content was successfully fetched, update the database
-        if content is not None:
-            now = datetime.now()
-            update_query = (
-                js_files.update()
-                .where(js_files.c.id == file_id)
-                .values(content=content, last_fetched=now)
-            )
-            await database.execute(update_query)
-            
-            # Fetch the updated record to return to the client
-            updated_record = await database.fetch_one(query)
-            return JSFileResponse(**updated_record)
+        if new_content is not None:
+            if existing_file.content != new_content:
+                now = datetime.now()
+                update_query = (
+                    js_files.update()
+                    .where(js_files.c.id == file_id)
+                    .values(content=new_content, last_fetched=now)
+                )
+                await database.execute(update_query)
+                
+                notification_message = {
+                    "file_id": str(file_id),
+                    "url": existing_file.url,
+                    "change_found_at": str(now)
+                }
+                asyncio.ensure_future(publish_message("file_changes", notification_message))
+
+                updated_record = await database.fetch_one(query)
+                return JSFileResponse(**updated_record)
         
-        # If content could not be fetched, return the existing file without updating
         return JSFileResponse(**existing_file)
 
     async def add_files(self, files: List[dict]):
         """
         Adds new JS files to the database.
         
-        The files parameter is now a list of dictionaries from the gRPC request.
+        The files parameter is a list of dictionaries.
         """
         results = []
         for file in files:

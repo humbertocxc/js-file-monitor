@@ -4,19 +4,14 @@ package jsmonitor;
 
 import "google/protobuf/timestamp.proto";
 
-// Service definition for monitoring JavaScript files.
 service JSMonitorService {
-  // Adds one or more new JavaScript files to the database.
   rpc AddJsFiles (AddJsFilesRequest) returns (AddJsFilesResponse);
 
-  // Fetches the content for a specific file and updates the database.
   rpc FetchAndUpdateJsFileContent (FetchAndUpdateJsFileContentRequest) returns (JsFileResponse);
 
-  // Lists all JS files, optionally filtered by company ID and with optional content fetching.
   rpc ListJsFiles (ListJsFilesRequest) returns (ListJsFilesResponse);
 }
 
-// Messages for AddJsFiles
 message JsFileCreate {
   string url = 1;
   int32 priority = 2;
@@ -31,12 +26,10 @@ message AddJsFilesResponse {
   repeated JsFileResponse files = 1;
 }
 
-// Messages for FetchAndUpdateJsFileContent
 message FetchAndUpdateJsFileContentRequest {
   string file_id = 1;
 }
 
-// Messages for ListJsFiles
 message ListJsFilesRequest {
   string company_id = 1;
   bool fetch_content = 2;
@@ -46,7 +39,6 @@ message ListJsFilesResponse {
   repeated JsFileResponse files = 1;
 }
 
-// Common message for a JavaScript file record.
 message JsFileResponse {
   string id = 1;
   string url = 2;

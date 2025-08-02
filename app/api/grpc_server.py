@@ -23,7 +23,6 @@ class JSMonitorServicer(js_monitor_pb2_grpc.JSMonitorServiceServicer):
         """
         files_to_add = []
         for file in request.files:
-            # We will perform the validation here since we are not using pydantic anymore for the API
             if not file.url.endswith('.js'):
                 await context.abort(grpc.StatusCode.INVALID_ARGUMENT, "URL must point to a JavaScript file (ending with .js)")
             files_to_add.append({
